@@ -3,6 +3,16 @@ import tkinter as tk
 from tkinter import filedialog, simpledialog, messagebox
 from PIL import Image, ImageTk
 
+def get_dominant_color(image_path):
+    img = Image.open(image_path).convert("RGB")
+    img = img.resize((50, 50))  # Speed up
+    pixels = list(img.getdata())
+    color_counts = {}
+    for color in pixels:
+        color_counts[color] = color_counts.get(color, 0) + 1
+    dominant = max(color_counts, key=color_counts.get)
+    # Convert to hex
+    return '#%02x%02x%02x' % dominant
 
 def get_form_fields(pdf_path):
     with open(pdf_path, "rb") as f:
@@ -18,7 +28,6 @@ def get_form_fields(pdf_path):
                         fields[name] = ""
         return fields
 
-
 def fill_pdf(input_pdf, output_pdf, field_values):
     with open(input_pdf, "rb") as f:
         reader = PyPDF2.PdfReader(f)
@@ -28,28 +37,33 @@ def fill_pdf(input_pdf, output_pdf, field_values):
         with open(output_pdf, "wb") as out_f:
             writer.write(out_f)
 
-
 def gui_main():
+    logo_bg = "#f5f6fa"
+    try:
+        logo_bg = get_dominant_color("sondhitravels_ganeshalogo.jpg")
+    except Exception:
+        pass
+
     root = tk.Tk()
     root.title("Sondhi Travel's Form Filler")
     root.geometry("540x600")
     root.resizable(True, True)
-    root.configure(bg="#f5f6fa")
+    root.configure(bg=logo_bg)
 
     # Welcome window with logo and upload button
-    welcome_frame = tk.Frame(root, bg="#f5f6fa")
+    welcome_frame = tk.Frame(root, bg=logo_bg)
     welcome_frame.pack(expand=True, fill="both")
 
     # Use the provided logo image at its original size and ratio
     try:
         logo_img = Image.open("sondhitravels_ganeshalogo.jpg")
         logo_photo = ImageTk.PhotoImage(logo_img)
-        logo_label = tk.Label(welcome_frame, image=logo_photo, bg="#f5f6fa")
+        logo_label = tk.Label(welcome_frame, image=logo_photo, bg=logo_bg)
         logo_label.image = logo_photo  # Keep a reference
         logo_label.pack(pady=(40, 10))
     except Exception:
         logo_label = tk.Label(
-            welcome_frame, text="📝", font=("Arial", 64), bg="#f5f6fa"
+            welcome_frame, text="📝", font=("Arial", 64), bg=logo_bg
         )
         logo_label.pack(pady=(40, 10))
 
@@ -58,7 +72,7 @@ def gui_main():
         text="Welcome to Sondhi Travel's PDF Form Filler",
         font=("Segoe UI", 18, "bold"),
         fg="#273c75",
-        bg="#f5f6fa",
+        bg=logo_bg,
     )
     title_label.pack(pady=(0, 8))
 
@@ -67,7 +81,7 @@ def gui_main():
         text="Easily fill out PDF forms with a few clicks.",
         font=("Segoe UI", 12),
         fg="#353b48",
-        bg="#f5f6fa",
+        bg=logo_bg,
     )
     subtitle_label.pack(pady=(0, 20))
 
@@ -105,9 +119,13 @@ def gui_main():
 
     root.mainloop()
 
-
 def show_form_fields(root, input_pdf, fields):
-    form_frame = tk.Frame(root, bg="#f5f6fa")
+    # Use the same background as the logo's dominant color
+    try:
+        logo_bg = get_dominant_color("sondhitravels_ganeshalogo.jpg")
+    except Exception:
+        logo_bg = "#f5f6fa"
+    form_frame = tk.Frame(root, bg=logo_bg)
     form_frame.pack(expand=True, fill="both")
     form_frame.rowconfigure(0, weight=1)
     form_frame.columnconfigure(0, weight=1)
@@ -120,9 +138,9 @@ def show_form_fields(root, input_pdf, fields):
     root.protocol("WM_DELETE_WINDOW", on_close)
 
     # Scrollable canvas and frame
-    canvas = tk.Canvas(form_frame, bg="#f5f6fa", highlightthickness=0)
+    canvas = tk.Canvas(form_frame, bg=logo_bg, highlightthickness=0)
     scrollbar = tk.Scrollbar(form_frame, orient="vertical", command=canvas.yview)
-    scroll_frame = tk.Frame(canvas, bg="#f5f6fa")
+    scroll_frame = tk.Frame(canvas, bg=logo_bg)
 
     scroll_frame.bind(
         "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
@@ -170,7 +188,7 @@ def show_form_fields(root, input_pdf, fields):
             text=field,
             font=label_font,
             anchor="e",
-            bg="#f5f6fa",
+            bg=logo_bg,
             fg="#353b48",
         ).grid(row=idx, column=0, sticky="e", padx=(20, 8), pady=6)
         text_widget = tk.Text(
@@ -226,7 +244,6 @@ def show_form_fields(root, input_pdf, fields):
     form_frame.grid_rowconfigure(0, weight=1)
     form_frame.grid_columnconfigure(0, weight=1)
     scroll_frame.grid_columnconfigure(1, weight=1)
-
 
 if __name__ == "__main__":
     gui_main()
