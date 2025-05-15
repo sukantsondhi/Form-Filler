@@ -169,46 +169,135 @@ def show_form_fields(root, input_pdf, fields):
         zoom_levels = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
         zoom_idx = 2
 
-        # Scrollable canvas for all pages
-        pdf_canvas = tk.Canvas(preview_frame, bg=logo_bg, highlightthickness=0)
-        pdf_canvas.pack(expand=True, fill="both", padx=10, pady=(10, 0))
-        pdf_scrollbar = tk.Scrollbar(
-            preview_frame, orient="vertical", command=pdf_canvas.yview
-        )
-        pdf_scrollbar.pack(side="right", fill="y")
-        pdf_canvas.configure(yscrollcommand=pdf_scrollbar.set)
-        pdf_pages_frame = tk.Frame(pdf_canvas, bg=logo_bg)
-        pdf_canvas.create_window((0, 0), window=pdf_pages_frame, anchor="nw")
+        doc = fitz.open(input_pdf)
+        total_pages = len(doc)
+        current_page = [0]  # Use list for mutability in closures
 
+        # --- PDF Preview Layout ---
+        preview_outer = tk.Frame(preview_frame, bg=logo_bg)
+        preview_outer.pack(expand=True, fill="both", padx=10, pady=(10, 0))
+
+        # Controls frame (for page input and zoom)
         controls = tk.Frame(preview_frame, bg=logo_bg)
         controls.pack(fill="x", padx=10, pady=(0, 10))
 
-        def render_pdf_images_fitz(zoom):
-            doc = fitz.open(input_pdf)
-            images = []
-            for page_num in range(len(doc)):
-                page = doc.load_page(page_num)
-                mat = fitz.Matrix(zoom, zoom)
-                pix = page.get_pixmap(matrix=mat)
-                mode = "RGBA" if pix.alpha else "RGB"
-                img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
-                images.append(img)
-            return images
+        # Canvas for PDF image (centered)
+        pdf_canvas = tk.Canvas(preview_outer, bg=logo_bg, highlightthickness=0)
+        pdf_canvas.grid(row=0, column=1, sticky="nsew")
+        preview_outer.grid_rowconfigure(0, weight=1)
+        preview_outer.grid_columnconfigure(1, weight=1)
+
+        # Left/right arrow buttons (vertically centered, even larger width, blue)
+        left_btn = tk.Button(
+            preview_outer,
+            text="←",
+            font=("Segoe UI", 10, "bold"),
+            width=4,  # Doubled width from 3 to 6
+            height=1,
+            bg="#2980ff",
+            fg="white",
+            activebackground="#407be7",
+            activeforeground="white",
+            relief="flat",
+            command=lambda: goto_prev_page(),
+        )
+        left_btn.grid(row=0, column=0, sticky="ns", padx=(0, 5), pady=0)
+
+        right_btn = tk.Button(
+            preview_outer,
+            text="→",
+            font=("Segoe UI", 10, "bold"),
+            width=4,  # Doubled width from 3 to 6
+            height=1,
+            bg="#2980ff",
+            fg="white",
+            activebackground="#407be7",
+            activeforeground="white",
+            relief="flat",
+            command=lambda: goto_next_page(),
+        )
+        right_btn.grid(row=0, column=2, sticky="ns", padx=(5, 0), pady=0)
+
+        # --- Navigation controls ---
+        def goto_prev_page():
+            if current_page[0] > 0:
+                current_page[0] -= 1
+                update_preview_fitz()
+
+        def goto_next_page():
+            if current_page[0] < total_pages - 1:
+                current_page[0] += 1
+                update_preview_fitz()
+
+        def goto_page(event=None):
+            try:
+                page = int(page_entry.get()) - 1
+                if 0 <= page < total_pages:
+                    current_page[0] = page
+                    update_preview_fitz()
+            except Exception:
+                pass  # ignore invalid input
+
+        # Page input bar
+        page_entry = tk.Entry(controls, width=5, font=("Segoe UI", 11))
+        page_entry.pack(side="left", padx=(0, 5))
+        page_entry.bind("<Return>", goto_page)
+
+        page_label = tk.Label(controls, text="", font=("Segoe UI", 11), bg=logo_bg)
+        page_label.pack(side="left", padx=(0, 10))
+
+        zoom_out_btn = tk.Button(
+            controls,
+            text="−",
+            font=("Segoe UI", 12, "bold"),
+            width=2,
+            command=lambda: zoom_out(),
+        )
+        zoom_out_btn.pack(side="left", padx=(0, 5))
+        zoom_label = tk.Label(controls, text="", font=("Segoe UI", 11), bg=logo_bg)
+        zoom_label.pack(side="left")
+        zoom_in_btn = tk.Button(
+            controls,
+            text="+",
+            font=("Segoe UI", 12, "bold"),
+            width=2,
+            command=lambda: zoom_in(),
+        )
+        zoom_in_btn.pack(side="left", padx=(5, 0))
+
+        def render_pdf_image_fitz(zoom, page_num):
+            page = doc.load_page(page_num)
+            mat = fitz.Matrix(zoom, zoom)
+            pix = page.get_pixmap(matrix=mat)
+            mode = "RGBA" if pix.alpha else "RGB"
+            img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
+            return img
 
         def update_preview_fitz():
             zoom = zoom_levels[zoom_idx]
-            # Clear previous images
-            for widget in pdf_pages_frame.winfo_children():
-                widget.destroy()
-            images = render_pdf_images_fitz(zoom)
-            for idx, img in enumerate(images):
-                photo = ImageTk.PhotoImage(img)
-                lbl = tk.Label(pdf_pages_frame, image=photo, bg=logo_bg)
-                lbl.image = photo
-                lbl.pack(pady=5)
+            page_num = current_page[0]
+            img = render_pdf_image_fitz(zoom, page_num)
+            photo = ImageTk.PhotoImage(img)
+            pdf_canvas.delete("all")
+            # Center the image in the canvas
+            canvas_width = pdf_canvas.winfo_width()
+            canvas_height = pdf_canvas.winfo_height()
+            x = max((canvas_width - img.width) // 2, 0)
+            y = max((canvas_height - img.height) // 2, 0)
+            pdf_canvas.create_image(x, y, anchor="nw", image=photo)
+            pdf_canvas.image = photo
+            pdf_canvas.config(
+                scrollregion=(
+                    0,
+                    0,
+                    max(canvas_width, img.width),
+                    max(canvas_height, img.height),
+                )
+            )
             zoom_label.config(text=f"Zoom: {int(zoom*100)}%")
-            pdf_canvas.update_idletasks()
-            pdf_canvas.config(scrollregion=pdf_canvas.bbox("all"))
+            page_label.config(text=f"Page {page_num+1} of {total_pages}")
+            page_entry.delete(0, tk.END)
+            page_entry.insert(0, str(page_num + 1))
 
         def zoom_in():
             nonlocal zoom_idx
@@ -221,17 +310,6 @@ def show_form_fields(root, input_pdf, fields):
             if zoom_idx > 0:
                 zoom_idx -= 1
                 update_preview_fitz()
-
-        zoom_out_btn = tk.Button(
-            controls, text="−", font=("Segoe UI", 12, "bold"), width=2, command=zoom_out
-        )
-        zoom_out_btn.pack(side="left", padx=(0, 5))
-        zoom_label = tk.Label(controls, text="", font=("Segoe UI", 11), bg=logo_bg)
-        zoom_label.pack(side="left")
-        zoom_in_btn = tk.Button(
-            controls, text="+", font=("Segoe UI", 12, "bold"), width=2, command=zoom_in
-        )
-        zoom_in_btn.pack(side="left", padx=(5, 0))
 
         # Mouse wheel zoom and vertical scroll for preview window
         def on_pdf_canvas_mousewheel(event):
@@ -255,7 +333,10 @@ def show_form_fields(root, input_pdf, fields):
                 else:
                     pdf_canvas.yview_scroll(-1 if event.num == 4 else 1, "units")
 
-        # Bind mousewheel only when cursor is over the preview window
+        pdf_canvas.bind("<Configure>", lambda e: update_preview_fitz())
+        pdf_canvas.bind("<Enter>", lambda e: bind_pdf_canvas_mousewheel())
+        pdf_canvas.bind("<Leave>", lambda e: unbind_pdf_canvas_mousewheel())
+
         def bind_pdf_canvas_mousewheel():
             pdf_canvas.bind_all("<MouseWheel>", on_pdf_canvas_mousewheel)
             pdf_canvas.bind_all("<Button-4>", on_pdf_canvas_mousewheel_linux)
@@ -265,9 +346,6 @@ def show_form_fields(root, input_pdf, fields):
             pdf_canvas.unbind_all("<MouseWheel>")
             pdf_canvas.unbind_all("<Button-4>")
             pdf_canvas.unbind_all("<Button-5>")
-
-        pdf_canvas.bind("<Enter>", lambda e: bind_pdf_canvas_mousewheel())
-        pdf_canvas.bind("<Leave>", lambda e: unbind_pdf_canvas_mousewheel())
 
         pdf_canvas.config(xscrollincrement=20, yscrollincrement=20)
 
@@ -446,6 +524,18 @@ def show_form_fields(root, input_pdf, fields):
     root.bind_all("<MouseWheel>", on_global_mousewheel)
     root.bind_all("<Button-4>", on_global_mousewheel_linux)
     root.bind_all("<Button-5>", on_global_mousewheel_linux)
+
+    # --- Footer ---
+    footer = tk.Label(
+        root,
+        text="Created with ♥ by Sukant Sondhi",
+        font=("Segoe UI", 10, "italic"),
+        fg="#273c75",
+        bg=logo_bg,
+        anchor="center",
+        pady=6,
+    )
+    footer.pack(side="bottom", fill="x")
 
 
 if __name__ == "__main__":
