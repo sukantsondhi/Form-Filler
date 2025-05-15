@@ -160,14 +160,10 @@ def show_form_fields(root, input_pdf, fields):
     preview_frame.rowconfigure(0, weight=1)
     preview_frame.columnconfigure(0, weight=1)
 
-    # PDF Preview with zoom controls using PyMuPDF (fitz) only, no poppler
     try:
         import fitz  # PyMuPDF
         zoom_levels = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
         zoom_idx = 2
-        preview_images = {}
-        pan_x = 0
-        pan_y = 0
 
         # Scrollable canvas for all pages
         pdf_canvas = tk.Canvas(preview_frame, bg=logo_bg, highlightthickness=0)
@@ -194,7 +190,6 @@ def show_form_fields(root, input_pdf, fields):
             return images
 
         def update_preview_fitz():
-            nonlocal zoom_idx
             zoom = zoom_levels[zoom_idx]
             # Clear previous images
             for widget in pdf_pages_frame.winfo_children():
@@ -228,8 +223,8 @@ def show_form_fields(root, input_pdf, fields):
         zoom_in_btn = tk.Button(controls, text="+", font=("Segoe UI", 12, "bold"), width=2, command=zoom_in)
         zoom_in_btn.pack(side="left", padx=(5,0))
 
-        # Mouse wheel zoom and pan
-        def on_mousewheel(event):
+        # Mouse wheel zoom and vertical scroll for preview window
+        def on_pdf_canvas_mousewheel(event):
             if event.state & 0x0004:  # Ctrl is pressed
                 if event.delta > 0 or getattr(event, 'num', None) == 4:
                     zoom_in()
@@ -238,10 +233,7 @@ def show_form_fields(root, input_pdf, fields):
             else:
                 pdf_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
-        def on_shift_mousewheel(event):
-            pdf_canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
-
-        def on_mousewheel_linux(event):
+        def on_pdf_canvas_mousewheel_linux(event):
             if event.state & 0x0004:  # Ctrl is pressed
                 if event.num == 4:
                     zoom_in()
@@ -253,10 +245,19 @@ def show_form_fields(root, input_pdf, fields):
                 else:
                     pdf_canvas.yview_scroll(-1 if event.num == 4 else 1, "units")
 
-        pdf_canvas.bind("<MouseWheel>", on_mousewheel)
-        pdf_canvas.bind("<Shift-MouseWheel>", on_shift_mousewheel)
-        pdf_canvas.bind("<Button-4>", on_mousewheel_linux)
-        pdf_canvas.bind("<Button-5>", on_mousewheel_linux)
+        # Bind mousewheel only when cursor is over the preview window
+        def bind_pdf_canvas_mousewheel():
+            pdf_canvas.bind_all("<MouseWheel>", on_pdf_canvas_mousewheel)
+            pdf_canvas.bind_all("<Button-4>", on_pdf_canvas_mousewheel_linux)
+            pdf_canvas.bind_all("<Button-5>", on_pdf_canvas_mousewheel_linux)
+
+        def unbind_pdf_canvas_mousewheel():
+            pdf_canvas.unbind_all("<MouseWheel>")
+            pdf_canvas.unbind_all("<Button-4>")
+            pdf_canvas.unbind_all("<Button-5>")
+
+        pdf_canvas.bind("<Enter>", lambda e: bind_pdf_canvas_mousewheel())
+        pdf_canvas.bind("<Leave>", lambda e: unbind_pdf_canvas_mousewheel())
 
         pdf_canvas.config(xscrollincrement=20, yscrollincrement=20)
 
