@@ -120,15 +120,157 @@ def gui_main():
     root.mainloop()
 
 def show_form_fields(root, input_pdf, fields):
-    # Use the same background as the logo's dominant color
+    import os
+
     try:
         logo_bg = get_dominant_color("sondhitravels_ganeshalogo.jpg")
     except Exception:
         logo_bg = "#f5f6fa"
-    form_frame = tk.Frame(root, bg=logo_bg)
-    form_frame.pack(expand=True, fill="both")
+
+    # Main frame with two columns: left for form, right for PDF preview
+    main_frame = tk.Frame(root, bg=logo_bg)
+    main_frame.pack(expand=True, fill="both")
+    main_frame.rowconfigure(1, weight=1)
+    main_frame.columnconfigure(0, weight=3)
+    main_frame.columnconfigure(1, weight=2)
+
+    # --- Top: PDF Name Label ---
+    pdf_name = os.path.basename(input_pdf)
+    pdf_name_label = tk.Label(
+        main_frame,
+        text=f"PDF: {pdf_name}",
+        font=("Segoe UI", 14, "bold"),
+        bg=logo_bg,
+        fg="#273c75",
+        anchor="w",
+        padx=10,
+        pady=8
+    )
+    pdf_name_label.grid(row=0, column=0, columnspan=2, sticky="ew")
+
+    # --- Left: Form Frame ---
+    form_frame = tk.Frame(main_frame, bg=logo_bg)
+    form_frame.grid(row=1, column=0, sticky="nsew")
     form_frame.rowconfigure(0, weight=1)
     form_frame.columnconfigure(0, weight=1)
+
+    # --- Right: PDF Preview Frame ---
+    preview_frame = tk.Frame(main_frame, bg=logo_bg)
+    preview_frame.grid(row=1, column=1, sticky="nsew")
+    preview_frame.rowconfigure(0, weight=1)
+    preview_frame.columnconfigure(0, weight=1)
+
+    # PDF Preview with zoom controls using PyMuPDF (fitz) only, no poppler
+    try:
+        import fitz  # PyMuPDF
+        zoom_levels = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+        zoom_idx = 2
+        preview_images = {}
+        pan_x = 0
+        pan_y = 0
+
+        # Scrollable canvas for all pages
+        pdf_canvas = tk.Canvas(preview_frame, bg=logo_bg, highlightthickness=0)
+        pdf_canvas.pack(expand=True, fill="both", padx=10, pady=(10,0))
+        pdf_scrollbar = tk.Scrollbar(preview_frame, orient="vertical", command=pdf_canvas.yview)
+        pdf_scrollbar.pack(side="right", fill="y")
+        pdf_canvas.configure(yscrollcommand=pdf_scrollbar.set)
+        pdf_pages_frame = tk.Frame(pdf_canvas, bg=logo_bg)
+        pdf_canvas.create_window((0, 0), window=pdf_pages_frame, anchor="nw")
+
+        controls = tk.Frame(preview_frame, bg=logo_bg)
+        controls.pack(fill="x", padx=10, pady=(0,10))
+
+        def render_pdf_images_fitz(zoom):
+            doc = fitz.open(input_pdf)
+            images = []
+            for page_num in range(len(doc)):
+                page = doc.load_page(page_num)
+                mat = fitz.Matrix(zoom, zoom)
+                pix = page.get_pixmap(matrix=mat)
+                mode = "RGBA" if pix.alpha else "RGB"
+                img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
+                images.append(img)
+            return images
+
+        def update_preview_fitz():
+            nonlocal zoom_idx
+            zoom = zoom_levels[zoom_idx]
+            # Clear previous images
+            for widget in pdf_pages_frame.winfo_children():
+                widget.destroy()
+            images = render_pdf_images_fitz(zoom)
+            for idx, img in enumerate(images):
+                photo = ImageTk.PhotoImage(img)
+                lbl = tk.Label(pdf_pages_frame, image=photo, bg=logo_bg)
+                lbl.image = photo
+                lbl.pack(pady=5)
+            zoom_label.config(text=f"Zoom: {int(zoom*100)}%")
+            pdf_canvas.update_idletasks()
+            pdf_canvas.config(scrollregion=pdf_canvas.bbox("all"))
+
+        def zoom_in():
+            nonlocal zoom_idx
+            if zoom_idx < len(zoom_levels) - 1:
+                zoom_idx += 1
+                update_preview_fitz()
+
+        def zoom_out():
+            nonlocal zoom_idx
+            if zoom_idx > 0:
+                zoom_idx -= 1
+                update_preview_fitz()
+
+        zoom_out_btn = tk.Button(controls, text="−", font=("Segoe UI", 12, "bold"), width=2, command=zoom_out)
+        zoom_out_btn.pack(side="left", padx=(0,5))
+        zoom_label = tk.Label(controls, text="", font=("Segoe UI", 11), bg=logo_bg)
+        zoom_label.pack(side="left")
+        zoom_in_btn = tk.Button(controls, text="+", font=("Segoe UI", 12, "bold"), width=2, command=zoom_in)
+        zoom_in_btn.pack(side="left", padx=(5,0))
+
+        # Mouse wheel zoom and pan
+        def on_mousewheel(event):
+            if event.state & 0x0004:  # Ctrl is pressed
+                if event.delta > 0 or getattr(event, 'num', None) == 4:
+                    zoom_in()
+                elif event.delta < 0 or getattr(event, 'num', None) == 5:
+                    zoom_out()
+            else:
+                pdf_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        def on_shift_mousewheel(event):
+            pdf_canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        def on_mousewheel_linux(event):
+            if event.state & 0x0004:  # Ctrl is pressed
+                if event.num == 4:
+                    zoom_in()
+                elif event.num == 5:
+                    zoom_out()
+            else:
+                if event.state & 0x0001:  # Shift for horizontal
+                    pdf_canvas.xview_scroll(-1 if event.num == 4 else 1, "units")
+                else:
+                    pdf_canvas.yview_scroll(-1 if event.num == 4 else 1, "units")
+
+        pdf_canvas.bind("<MouseWheel>", on_mousewheel)
+        pdf_canvas.bind("<Shift-MouseWheel>", on_shift_mousewheel)
+        pdf_canvas.bind("<Button-4>", on_mousewheel_linux)
+        pdf_canvas.bind("<Button-5>", on_mousewheel_linux)
+
+        pdf_canvas.config(xscrollincrement=20, yscrollincrement=20)
+
+        update_preview_fitz()
+    except Exception as e:
+        pdf_label = tk.Label(
+            preview_frame,
+            text=f"PDF preview not available\n{e}",
+            bg=logo_bg,
+            fg="#888",
+            font=("Segoe UI", 12, "italic"),
+            justify="center"
+        )
+        pdf_label.pack(expand=True, fill="both", padx=10, pady=10)
 
     # Exit the program when the user presses the X icon
     def on_close():
@@ -183,9 +325,11 @@ def show_form_fields(root, input_pdf, fields):
         text_widget.config(height=new_height, width=new_width)
 
     for idx, field in enumerate(fields):
+        # Remove the word "fillable" if present in the field name
+        display_field = field.replace("fillable", "").replace("Fillable", "").strip()
         tk.Label(
             scroll_frame,
-            text=field,
+            text=display_field,
             font=label_font,
             anchor="e",
             bg=logo_bg,
@@ -193,7 +337,7 @@ def show_form_fields(root, input_pdf, fields):
         ).grid(row=idx, column=0, sticky="e", padx=(20, 8), pady=6)
         text_widget = tk.Text(
             scroll_frame,
-            width=40,
+            width=80,  # doubled from 40 to 80
             height=3,
             font=entry_font,
             bg="#f0f0f0",
