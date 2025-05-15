@@ -341,7 +341,7 @@ def show_form_fields(root, input_pdf, fields):
         tk.Label(
             scroll_frame,
             text=display_field,
-            font=label_font,
+            font=("Segoe UI", 11, "bold"),  # Make entry title bold
             anchor="e",
             bg=logo_bg,
             fg="#353b48",
