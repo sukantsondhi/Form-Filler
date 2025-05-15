@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import filedialog, simpledialog, messagebox
 from PIL import Image, ImageTk
 
+
 def get_dominant_color(image_path):
     img = Image.open(image_path).convert("RGB")
     img = img.resize((50, 50))  # Speed up
@@ -12,7 +13,8 @@ def get_dominant_color(image_path):
         color_counts[color] = color_counts.get(color, 0) + 1
     dominant = max(color_counts, key=color_counts.get)
     # Convert to hex
-    return '#%02x%02x%02x' % dominant
+    return "#%02x%02x%02x" % dominant
+
 
 def get_form_fields(pdf_path):
     with open(pdf_path, "rb") as f:
@@ -28,6 +30,7 @@ def get_form_fields(pdf_path):
                         fields[name] = ""
         return fields
 
+
 def fill_pdf(input_pdf, output_pdf, field_values):
     with open(input_pdf, "rb") as f:
         reader = PyPDF2.PdfReader(f)
@@ -36,6 +39,7 @@ def fill_pdf(input_pdf, output_pdf, field_values):
         writer.update_page_form_field_values(writer.pages[0], field_values)
         with open(output_pdf, "wb") as out_f:
             writer.write(out_f)
+
 
 def gui_main():
     logo_bg = "#f5f6fa"
@@ -62,9 +66,7 @@ def gui_main():
         logo_label.image = logo_photo  # Keep a reference
         logo_label.pack(pady=(40, 10))
     except Exception:
-        logo_label = tk.Label(
-            welcome_frame, text="📝", font=("Arial", 64), bg=logo_bg
-        )
+        logo_label = tk.Label(welcome_frame, text="📝", font=("Arial", 64), bg=logo_bg)
         logo_label.pack(pady=(40, 10))
 
     title_label = tk.Label(
@@ -119,6 +121,7 @@ def gui_main():
 
     root.mainloop()
 
+
 def show_form_fields(root, input_pdf, fields):
     import os
 
@@ -144,7 +147,7 @@ def show_form_fields(root, input_pdf, fields):
         fg="#273c75",
         anchor="w",
         padx=10,
-        pady=8
+        pady=8,
     )
     pdf_name_label.grid(row=0, column=0, columnspan=2, sticky="ew")
 
@@ -162,20 +165,23 @@ def show_form_fields(root, input_pdf, fields):
 
     try:
         import fitz  # PyMuPDF
+
         zoom_levels = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
         zoom_idx = 2
 
         # Scrollable canvas for all pages
         pdf_canvas = tk.Canvas(preview_frame, bg=logo_bg, highlightthickness=0)
-        pdf_canvas.pack(expand=True, fill="both", padx=10, pady=(10,0))
-        pdf_scrollbar = tk.Scrollbar(preview_frame, orient="vertical", command=pdf_canvas.yview)
+        pdf_canvas.pack(expand=True, fill="both", padx=10, pady=(10, 0))
+        pdf_scrollbar = tk.Scrollbar(
+            preview_frame, orient="vertical", command=pdf_canvas.yview
+        )
         pdf_scrollbar.pack(side="right", fill="y")
         pdf_canvas.configure(yscrollcommand=pdf_scrollbar.set)
         pdf_pages_frame = tk.Frame(pdf_canvas, bg=logo_bg)
         pdf_canvas.create_window((0, 0), window=pdf_pages_frame, anchor="nw")
 
         controls = tk.Frame(preview_frame, bg=logo_bg)
-        controls.pack(fill="x", padx=10, pady=(0,10))
+        controls.pack(fill="x", padx=10, pady=(0, 10))
 
         def render_pdf_images_fitz(zoom):
             doc = fitz.open(input_pdf)
@@ -216,19 +222,23 @@ def show_form_fields(root, input_pdf, fields):
                 zoom_idx -= 1
                 update_preview_fitz()
 
-        zoom_out_btn = tk.Button(controls, text="−", font=("Segoe UI", 12, "bold"), width=2, command=zoom_out)
-        zoom_out_btn.pack(side="left", padx=(0,5))
+        zoom_out_btn = tk.Button(
+            controls, text="−", font=("Segoe UI", 12, "bold"), width=2, command=zoom_out
+        )
+        zoom_out_btn.pack(side="left", padx=(0, 5))
         zoom_label = tk.Label(controls, text="", font=("Segoe UI", 11), bg=logo_bg)
         zoom_label.pack(side="left")
-        zoom_in_btn = tk.Button(controls, text="+", font=("Segoe UI", 12, "bold"), width=2, command=zoom_in)
-        zoom_in_btn.pack(side="left", padx=(5,0))
+        zoom_in_btn = tk.Button(
+            controls, text="+", font=("Segoe UI", 12, "bold"), width=2, command=zoom_in
+        )
+        zoom_in_btn.pack(side="left", padx=(5, 0))
 
         # Mouse wheel zoom and vertical scroll for preview window
         def on_pdf_canvas_mousewheel(event):
             if event.state & 0x0004:  # Ctrl is pressed
-                if event.delta > 0 or getattr(event, 'num', None) == 4:
+                if event.delta > 0 or getattr(event, "num", None) == 4:
                     zoom_in()
-                elif event.delta < 0 or getattr(event, 'num', None) == 5:
+                elif event.delta < 0 or getattr(event, "num", None) == 5:
                     zoom_out()
             else:
                 pdf_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -269,7 +279,7 @@ def show_form_fields(root, input_pdf, fields):
             bg=logo_bg,
             fg="#888",
             font=("Segoe UI", 12, "italic"),
-            justify="center"
+            justify="center",
         )
         pdf_label.pack(expand=True, fill="both", padx=10, pady=10)
 
@@ -345,7 +355,7 @@ def show_form_fields(root, input_pdf, fields):
             relief="flat",
             highlightthickness=1,
             highlightbackground="#dcdde1",
-            wrap="word"
+            wrap="word",
         )
         text_widget.grid(row=idx, column=1, padx=(0, 20), pady=6, sticky="ew")
         scroll_frame.columnconfigure(1, weight=1)
@@ -356,7 +366,9 @@ def show_form_fields(root, input_pdf, fields):
 
     def on_submit():
         # Get all text from each Text widget
-        field_values = {field: entry.get("1.0", "end-1c") for field, entry in entries.items()}
+        field_values = {
+            field: entry.get("1.0", "end-1c") for field, entry in entries.items()
+        }
         output_pdf = filedialog.asksaveasfilename(
             title="Save filled PDF as",
             defaultextension=".pdf",
@@ -389,6 +401,52 @@ def show_form_fields(root, input_pdf, fields):
     form_frame.grid_rowconfigure(0, weight=1)
     form_frame.grid_columnconfigure(0, weight=1)
     scroll_frame.grid_columnconfigure(1, weight=1)
+
+    # --- Mousewheel scroll logic for both sides ---
+    mouse_side = {"left": False, "right": False}
+
+    def on_entry_enter(event):
+        mouse_side["left"] = True
+
+    def on_entry_leave(event):
+        mouse_side["left"] = False
+
+    def on_pdf_enter(event):
+        mouse_side["right"] = True
+
+    def on_pdf_leave(event):
+        mouse_side["right"] = False
+
+    canvas.bind("<Enter>", on_entry_enter)
+    canvas.bind("<Leave>", on_entry_leave)
+    pdf_canvas.bind("<Enter>", on_pdf_enter)
+    pdf_canvas.bind("<Leave>", on_pdf_leave)
+
+    def on_global_mousewheel(event):
+        # Windows/Mac
+        if mouse_side["right"]:
+            pdf_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        elif mouse_side["left"]:
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def on_global_mousewheel_linux(event):
+        # Linux
+        if mouse_side["right"]:
+            if event.num == 4:
+                pdf_canvas.yview_scroll(-1, "units")
+            elif event.num == 5:
+                pdf_canvas.yview_scroll(1, "units")
+        elif mouse_side["left"]:
+            if event.num == 4:
+                canvas.yview_scroll(-1, "units")
+            elif event.num == 5:
+                canvas.yview_scroll(1, "units")
+
+    # Bind toplevel for global mousewheel
+    root.bind_all("<MouseWheel>", on_global_mousewheel)
+    root.bind_all("<Button-4>", on_global_mousewheel_linux)
+    root.bind_all("<Button-5>", on_global_mousewheel_linux)
+
 
 if __name__ == "__main__":
     gui_main()
