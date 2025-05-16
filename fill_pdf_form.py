@@ -787,32 +787,37 @@ def show_form_fields(root, input_pdf, fields, schengen_checkbox_fields=None, sch
     def on_pdf_leave(event):
         mouse_side["right"] = False
 
-    canvas.bind("<Enter>", on_entry_enter)
-    canvas.bind("<Leave>", on_entry_leave)
+    # Use form_frame (not just canvas) to detect mouse on left side
+    form_frame.bind("<Enter>", on_entry_enter)
+    form_frame.bind("<Leave>", on_entry_leave)
     pdf_canvas.bind("<Enter>", on_pdf_enter)
     pdf_canvas.bind("<Leave>", on_pdf_leave)
 
     def on_global_mousewheel(event):
         # Windows/Mac
         if mouse_side["right"]:
-            pdf_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            img = getattr(pdf_canvas, "image", None)
+            if img and (img.width() > pdf_canvas.winfo_width() or img.height() > pdf_canvas.winfo_height()):
+                pdf_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
         elif mouse_side["left"]:
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     def on_global_mousewheel_linux(event):
         # Linux
         if mouse_side["right"]:
-            if event.num == 4:
-                pdf_canvas.yview_scroll(-1, "units")
-            elif event.num == 5:
-                pdf_canvas.yview_scroll(1, "units")
+            img = getattr(pdf_canvas, "image", None)
+            if img and (img.width() > pdf_canvas.winfo_width() or img.height() > pdf_canvas.winfo_height()):
+                if event.num == 4:
+                    pdf_canvas.yview_scroll(-1, "units")
+                elif event.num == 5:
+                    pdf_canvas.yview_scroll(1, "units")
         elif mouse_side["left"]:
             if event.num == 4:
                 canvas.yview_scroll(-1, "units")
             elif event.num == 5:
                 canvas.yview_scroll(1, "units")
 
-    # Bind toplevel for global mousewheel
+    # Bind toplevel for global mousewheel ONCE, persistently
     root.bind_all("<MouseWheel>", on_global_mousewheel)
     root.bind_all("<Button-4>", on_global_mousewheel_linux)
     root.bind_all("<Button-5>", on_global_mousewheel_linux)
