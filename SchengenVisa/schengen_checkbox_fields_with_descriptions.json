@@ -1,0 +1,77 @@
+{
+  "gender": {
+    "applicantGenderM": "Male",
+    "applicantGenderF": "Female",
+    "applicantGenderA": "Other"
+  },
+  "marital_status": {
+    "applicantMaritalCEL": "Single",
+    "applicantMaritalMAR": "Married",
+    "applicantMaritalPAC": "Registered partnership",
+    "applicantMaritalSEP": "Separated",
+    "applicantMaritalDIV": "Divorced",
+    "applicantMaritalVEU": "Widow(er)",
+    "applicantMaritalAUT": "Other"
+  },
+  "travel_doc_type": {
+    "travelDocTypePO": "Ordinary passport",
+    "travelDocTypePD": "Diplomatic passport",
+    "travelDocTypePSV": "Service passport",
+    "travelDocTypePOF": "Official passport",
+    "travelDocTypePSP": "Special passport",
+    "travelDocTypeAUT": "Other"
+  },
+  "residence_permit": {
+    "applicantResidencePermitYes": "Yes",
+    "applicantResidencePermitNo": "No"
+  },
+  "purpose_of_journey": {
+    "purposeTOUR": "Tourism",
+    "purposeTRAV": "Business",
+    "purposeVISF": "Visiting family or friends",
+    "purposeCULT": "Cultural",
+    "purposeSPOR": "Sports",
+    "purposeVOFF": "Official visit",
+    "purposeMEDI": "Medical reasons",
+    "purposeETUD": "Study",
+    "purposeATRA": "Airport transit",
+    "purposeAUTR": "Other"
+  },
+  "entries_requested": {
+    "entries1": "Single entry",
+    "entries2": "Two entries",
+    "entriesM": "Multiple entries"
+  },
+  "fingerprints_collected": {
+    "hasFingerprintsTrue": "Yes",
+    "hasFingerprintsFalse": "No"
+  },
+  "relationship_with_eu_citizen": {
+    "relationshipCON": "Spouse",
+    "relationshipENF": "Child",
+    "relationshipPFI": "Grandchild",
+    "relationshipAAC": "Dependent ascendant",
+    "relationshipPAC": "Registered partnership",
+    "relationshipAUT": "Other"
+  },
+  "cost_covered_by": {
+    "sponsorTypeM": "By the applicant",
+    "sponsorTypeHAS": "By sponsor referred to in fields 30 or 31",
+    "sponsorTypeOther": "By other sponsor"
+  },
+  "applicant_support_means": {
+    "fundingTypeM_ARG": "Cash",
+    "fundingTypeM_CHQ": "Traveller\u2019s cheques",
+    "fundingTypeM_CCR": "Credit card",
+    "fundingTypeM_HPP": "Pre-paid accommodation",
+    "fundingTypeM_TPP": "Pre-paid transport",
+    "fundingTypeM_Other": "Other"
+  },
+  "sponsor_support_means": {
+    "fundingTypeHAS_ARG": "Cash",
+    "fundingTypeHAS_HFO": "Accommodation provided",
+    "fundingTypeHAS_TFP": "All expenses covered during stay",
+    "fundingTypeHAS_TPA": "Pre-paid transport",
+    "fundingTypeHAS_Other": "Other"
+  }
+}

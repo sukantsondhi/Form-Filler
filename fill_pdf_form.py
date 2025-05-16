@@ -2,6 +2,8 @@ import PyPDF2
 import tkinter as tk
 from tkinter import filedialog, simpledialog, messagebox
 from PIL import Image, ImageTk
+import re
+import json  # <-- add this
 
 
 def get_dominant_color(image_path):
@@ -54,7 +56,7 @@ def gui_main():
     root.resizable(True, True)
     root.configure(bg=logo_bg)
 
-    # Welcome window with logo and upload button
+    # Welcome window with logo and application buttons
     welcome_frame = tk.Frame(root, bg=logo_bg)
     welcome_frame.pack(expand=True, fill="both")
 
@@ -87,26 +89,43 @@ def gui_main():
     )
     subtitle_label.pack(pady=(0, 20))
 
-    def upload_pdf():
-        input_pdf = filedialog.askopenfilename(
-            title="Select PDF file", filetypes=[("PDF files", "*.pdf")]
-        )
-        if not input_pdf:
-            messagebox.showinfo("Cancelled", "No PDF selected.")
-            return
-
+    # Remove upload button, add three application buttons
+    def app_btn_handler(app_num):
+        if app_num == 1:
+            input_pdf = "SchengenVisa/Application for Schengen Visa.pdf"
+            # Load Schengen field descriptions
+            try:
+                with open("SchengenVisa/schengen_checkbox_fields_with_descriptions.json", "r", encoding="utf-8") as f:
+                    schengen_checkbox_fields = json.load(f)
+                with open("SchengenVisa/schengen_text_fields_with_descriptions.json", "r", encoding="utf-8") as f:
+                    schengen_text_fields = json.load(f)
+            except Exception as e:
+                schengen_checkbox_fields = {}
+                schengen_text_fields = {}
+        else:
+            input_pdf = filedialog.askopenfilename(
+                title=f"Select PDF file for Application {app_num}",
+                filetypes=[("PDF files", "*.pdf")]
+            )
+            if not input_pdf:
+                messagebox.showinfo("Cancelled", "No PDF selected.")
+                return
+            schengen_checkbox_fields = {}
+            schengen_text_fields = {}
         fields = get_form_fields(input_pdf)
         if not fields:
             messagebox.showinfo("No Fields", "No editable fields found in the PDF.")
             return
-
-        # Remove welcome frame and show form fields in the same window
         welcome_frame.pack_forget()
-        show_form_fields(root, input_pdf, fields)
+        show_form_fields(root, input_pdf, fields, schengen_checkbox_fields, schengen_text_fields)
 
-    upload_btn = tk.Button(
-        welcome_frame,
-        text="Upload PDF",
+    btn_frame = tk.Frame(welcome_frame, bg=logo_bg)
+    btn_frame.pack(pady=30)
+
+    # Application 1: Always open the specific file
+    btn1 = tk.Button(
+        btn_frame,
+        text="Application for Schengen Visa",
         font=("Segoe UI", 14, "bold"),
         bg="#44bd32",
         fg="white",
@@ -115,15 +134,38 @@ def gui_main():
         relief="flat",
         padx=30,
         pady=10,
-        command=upload_pdf,
+        command=lambda: app_btn_handler(1),
     )
-    upload_btn.pack(pady=30)
+    btn1.pack(side="top", pady=10, fill="x", expand=True)
+
+    # Application 2 and 3: Use file dialog
+    for i in range(2, 4):
+        btn = tk.Button(
+            btn_frame,
+            text=f"Application {i}",
+            font=("Segoe UI", 14, "bold"),
+            bg="#44bd32",
+            fg="white",
+            activebackground="#4cd137",
+            activeforeground="white",
+            relief="flat",
+            padx=30,
+            pady=10,
+            command=lambda n=i: app_btn_handler(n),
+        )
+        btn.pack(side="top", pady=10, fill="x", expand=True)
 
     root.mainloop()
 
 
-def show_form_fields(root, input_pdf, fields):
+def show_form_fields(root, input_pdf, fields, schengen_checkbox_fields=None, schengen_text_fields=None):
     import os
+    import threading
+
+    if schengen_checkbox_fields is None:
+        schengen_checkbox_fields = {}
+    if schengen_text_fields is None:
+        schengen_text_fields = {}
 
     try:
         logo_bg = get_dominant_color("sondhitravels_ganeshalogo.jpg")
@@ -173,26 +215,22 @@ def show_form_fields(root, input_pdf, fields):
         total_pages = len(doc)
         current_page = [0]  # Use list for mutability in closures
 
-        # --- PDF Preview Layout ---
         preview_outer = tk.Frame(preview_frame, bg=logo_bg)
         preview_outer.pack(expand=True, fill="both", padx=10, pady=(10, 0))
 
-        # Controls frame (for page input and zoom)
         controls = tk.Frame(preview_frame, bg=logo_bg)
         controls.pack(fill="x", padx=10, pady=(0, 10))
 
-        # Canvas for PDF image (centered)
         pdf_canvas = tk.Canvas(preview_outer, bg=logo_bg, highlightthickness=0)
         pdf_canvas.grid(row=0, column=1, sticky="nsew")
         preview_outer.grid_rowconfigure(0, weight=1)
         preview_outer.grid_columnconfigure(1, weight=1)
 
-        # Left/right arrow buttons (vertically centered, even larger width, blue)
         left_btn = tk.Button(
             preview_outer,
             text="←",
             font=("Segoe UI", 10, "bold"),
-            width=4,  # Doubled width from 3 to 6
+            width=4,
             height=1,
             bg="#2980ff",
             fg="white",
@@ -207,7 +245,7 @@ def show_form_fields(root, input_pdf, fields):
             preview_outer,
             text="→",
             font=("Segoe UI", 10, "bold"),
-            width=4,  # Doubled width from 3 to 6
+            width=4,
             height=1,
             bg="#2980ff",
             fg="white",
@@ -218,7 +256,92 @@ def show_form_fields(root, input_pdf, fields):
         )
         right_btn.grid(row=0, column=2, sticky="ns", padx=(5, 0), pady=0)
 
-        # --- Navigation controls ---
+        # --- Centered page navigation controls ---
+        nav_frame = tk.Frame(controls, bg=logo_bg)
+        nav_frame.pack(side="top", expand=True)
+
+        page_entry = tk.Entry(nav_frame, width=5, font=("Segoe UI", 11))
+        page_entry.pack(side="left", padx=(0, 5))
+
+        def goto_page(event=None):
+            try:
+                page = int(page_entry.get()) - 1
+                if 0 <= page < total_pages:
+                    current_page[0] = page
+                    update_preview_fitz()
+            except Exception:
+                pass  # ignore invalid input
+
+        page_entry.bind("<Return>", goto_page)
+
+        page_label = tk.Label(nav_frame, text="", font=("Segoe UI", 11), bg=logo_bg)
+        page_label.pack(side="left", padx=(0, 10))
+
+        zoom_out_btn = tk.Button(
+            controls,
+            text="−",
+            font=("Segoe UI", 12, "bold"),
+            width=2,
+            command=lambda: zoom_out(),
+        )
+        zoom_out_btn.pack(side="right", padx=(0, 5))
+        zoom_label = tk.Label(controls, text="", font=("Segoe UI", 11), bg=logo_bg)
+        zoom_label.pack(side="right")
+        zoom_in_btn = tk.Button(
+            controls,
+            text="+",
+            font=("Segoe UI", 12, "bold"),
+            width=2,
+            command=lambda: zoom_in(),
+        )
+        zoom_in_btn.pack(side="right", padx=(5, 0))
+
+        # --- Fast PDF rendering with threading ---
+        pdf_render_lock = threading.Lock()
+        pdf_render_cache = {}
+
+        def render_pdf_image_fitz(zoom, page_num):
+            cache_key = (zoom, page_num)
+            if cache_key in pdf_render_cache:
+                return pdf_render_cache[cache_key]
+            page = doc.load_page(page_num)
+            mat = fitz.Matrix(zoom, zoom)
+            pix = page.get_pixmap(matrix=mat)
+            mode = "RGBA" if pix.alpha else "RGB"
+            img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
+            pdf_render_cache[cache_key] = img
+            return img
+
+        def update_preview_fitz():
+            zoom = zoom_levels[zoom_idx]
+            page_num = current_page[0]
+            def render_and_update():
+                with pdf_render_lock:
+                    img = render_pdf_image_fitz(zoom, page_num)
+                    photo = ImageTk.PhotoImage(img)
+                    def update_canvas():
+                        pdf_canvas.delete("all")
+                        canvas_width = pdf_canvas.winfo_width()
+                        canvas_height = pdf_canvas.winfo_height()
+                        x = max((canvas_width - img.width) // 2, 0)
+                        y = max((canvas_height - img.height) // 2, 0)
+                        pdf_canvas.create_image(x, y, anchor="nw", image=photo)
+                        pdf_canvas.image = photo
+                        pdf_canvas.config(
+                            scrollregion=(
+                                0,
+                                0,
+                                max(canvas_width, img.width),
+                                max(canvas_height, img.height),
+                            )
+                        )
+                        zoom_label.config(text=f"Zoom: {int(zoom*100)}%")
+                        page_label.config(text=f"Page {page_num+1} of {total_pages}")
+                        page_entry.delete(0, tk.END)
+                        page_entry.insert(0, str(page_num + 1))
+                    root.after(0, update_canvas)
+            threading.Thread(target=render_and_update, daemon=True).start()
+
         def goto_prev_page():
             if current_page[0] > 0:
                 current_page[0] -= 1
@@ -237,67 +360,6 @@ def show_form_fields(root, input_pdf, fields):
                     update_preview_fitz()
             except Exception:
                 pass  # ignore invalid input
-
-        # Page input bar
-        page_entry = tk.Entry(controls, width=5, font=("Segoe UI", 11))
-        page_entry.pack(side="left", padx=(0, 5))
-        page_entry.bind("<Return>", goto_page)
-
-        page_label = tk.Label(controls, text="", font=("Segoe UI", 11), bg=logo_bg)
-        page_label.pack(side="left", padx=(0, 10))
-
-        zoom_out_btn = tk.Button(
-            controls,
-            text="−",
-            font=("Segoe UI", 12, "bold"),
-            width=2,
-            command=lambda: zoom_out(),
-        )
-        zoom_out_btn.pack(side="left", padx=(0, 5))
-        zoom_label = tk.Label(controls, text="", font=("Segoe UI", 11), bg=logo_bg)
-        zoom_label.pack(side="left")
-        zoom_in_btn = tk.Button(
-            controls,
-            text="+",
-            font=("Segoe UI", 12, "bold"),
-            width=2,
-            command=lambda: zoom_in(),
-        )
-        zoom_in_btn.pack(side="left", padx=(5, 0))
-
-        def render_pdf_image_fitz(zoom, page_num):
-            page = doc.load_page(page_num)
-            mat = fitz.Matrix(zoom, zoom)
-            pix = page.get_pixmap(matrix=mat)
-            mode = "RGBA" if pix.alpha else "RGB"
-            img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
-            return img
-
-        def update_preview_fitz():
-            zoom = zoom_levels[zoom_idx]
-            page_num = current_page[0]
-            img = render_pdf_image_fitz(zoom, page_num)
-            photo = ImageTk.PhotoImage(img)
-            pdf_canvas.delete("all")
-            # Center the image in the canvas
-            canvas_width = pdf_canvas.winfo_width()
-            canvas_height = pdf_canvas.winfo_height()
-            x = max((canvas_width - img.width) // 2, 0)
-            y = max((canvas_height - img.height) // 2, 0)
-            pdf_canvas.create_image(x, y, anchor="nw", image=photo)
-            pdf_canvas.image = photo
-            pdf_canvas.config(
-                scrollregion=(
-                    0,
-                    0,
-                    max(canvas_width, img.width),
-                    max(canvas_height, img.height),
-                )
-            )
-            zoom_label.config(text=f"Zoom: {int(zoom*100)}%")
-            page_label.config(text=f"Page {page_num+1} of {total_pages}")
-            page_entry.delete(0, tk.END)
-            page_entry.insert(0, str(page_num + 1))
 
         def zoom_in():
             nonlocal zoom_idx
@@ -413,40 +475,270 @@ def show_form_fields(root, input_pdf, fields):
         new_width = max(40, min(max_line_len + 2, 120))
         text_widget.config(height=new_height, width=new_width)
 
-    for idx, field in enumerate(fields):
-        # Remove the word "fillable" if present in the field name
-        display_field = field.replace("fillable", "").replace("Fillable", "").strip()
-        tk.Label(
-            scroll_frame,
-            text=display_field,
-            font=("Segoe UI", 11, "bold"),  # Make entry title bold
-            anchor="e",
-            bg=logo_bg,
-            fg="#353b48",
-        ).grid(row=idx, column=0, sticky="e", padx=(20, 8), pady=6)
-        text_widget = tk.Text(
-            scroll_frame,
-            width=80,  # doubled from 40 to 80
-            height=3,
-            font=entry_font,
-            bg="#f0f0f0",
-            relief="flat",
-            highlightthickness=1,
-            highlightbackground="#dcdde1",
-            wrap="word",
-        )
-        text_widget.grid(row=idx, column=1, padx=(0, 20), pady=6, sticky="ew")
-        scroll_frame.columnconfigure(1, weight=1)
-        # Bind resizing on key release and paste
-        text_widget.bind("<KeyRelease>", lambda e, tw=text_widget: auto_resize(e, tw))
-        text_widget.bind("<<Paste>>", lambda e, tw=text_widget: auto_resize(e, tw))
-        entries[field] = text_widget
+    # --- Get field page mapping and type/options for reference ---
+    field_page_map = {}
+    field_types_map = {}
+    field_options_map = {}
+    try:
+        with open(input_pdf, "rb") as f:
+            reader = PyPDF2.PdfReader(f)
+            if "/AcroForm" in reader.trailer["/Root"]:
+                form = reader.trailer["/Root"]["/AcroForm"]
+                if "/Fields" in form:
+                    for field_obj in form["/Fields"]:
+                        obj = field_obj.get_object()
+                        name = obj.get("/T")
+                        page_num = None
+                        try:
+                            if "/P" in obj:
+                                page_obj = obj["/P"]
+                                for idx, page in enumerate(reader.pages):
+                                    if page_obj == page:
+                                        page_num = idx + 1
+                                        break
+                        except Exception:
+                            page_num = None
+                        if name:
+                            field_page_map[name] = page_num
+                            ft = obj.get("/FT")
+                            if ft == "/Ch":
+                                field_types_map[name] = "select"
+                                opts = obj.get("/Opt")
+                                if opts:
+                                    options = []
+                                    for o in opts:
+                                        if isinstance(o, str):
+                                            options.append(o)
+                                        elif hasattr(o, "get_object"):
+                                            options.append(str(o.get_object()))
+                                    field_options_map[name] = options
+                            else:
+                                field_types_map[name] = "text"
+    except Exception:
+        pass
+
+    def humanize_field_name(field):
+        # Replace underscores and dashes with space
+        s = field.replace("_", " ").replace("-", " ")
+        # Insert space before capital letters (except first)
+        s = re.sub(r'(?<!^)(?=[A-Z])', ' ', s)
+        # Insert space between letters and digits
+        s = re.sub(r'([a-zA-Z])(\d)', r'\1 \2', s)
+        s = re.sub(r'(\d)([a-zA-Z])', r'\1 \2', s)
+        # Remove extra spaces and capitalize each word
+        s = ' '.join(s.split())
+        return s.title()
+
+    # --- Sort fields by page number and order in PDF ---
+    sorted_fields = []
+    try:
+        with open(input_pdf, "rb") as f:
+            reader = PyPDF2.PdfReader(f)
+            if "/AcroForm" in reader.trailer["/Root"]:
+                form = reader.trailer["/Root"]["/AcroForm"]
+                if "/Fields" in form:
+                    for field_obj in form["/Fields"]:
+                        obj = field_obj.get_object()
+                        name = obj.get("/T")
+                        if name in fields:
+                            sorted_fields.append(name)
+    except Exception:
+        sorted_fields = list(fields.keys())
+
+    # Group fields by page number, preserving order, and ignore None page numbers
+    page_fields = {}
+    for field in sorted_fields:
+        page = field_page_map.get(field, 1)
+        if page is None:
+            continue  # skip fields with unknown page
+        page_fields.setdefault(page, []).append(field)
+
+    # --- Render all fields grouped by page, page 1 first, then 2, etc. ---
+    row_idx = 0
+
+    # --- For Schengen Visa, build reverse lookup for checkbox fields ---
+    schengen_checkbox_lookup = {}
+    schengen_checkbox_field_to_group = {}
+    for group, mapping in schengen_checkbox_fields.items():
+        for field_code, label in mapping.items():
+            schengen_checkbox_lookup[field_code] = label
+            schengen_checkbox_field_to_group[field_code] = group
+
+    # For mandatory fields: mark all as mandatory for Schengen, or use a rule
+    def is_mandatory(field_name, description):
+        # You can customize this rule as needed
+        # For now, mark all Schengen fields as mandatory
+        return bool(schengen_checkbox_fields or schengen_text_fields)
+
+    # --- Group checkboxes by group for Schengen ---
+    checkbox_groups = {}
+    for group, mapping in schengen_checkbox_fields.items():
+        for field_code in mapping:
+            checkbox_groups.setdefault(group, []).append(field_code)
+
+    # --- Track which checkboxes have been rendered ---
+    rendered_checkbox_groups = set()
+
+    for page_num in sorted(page_fields.keys()):
+        for field in page_fields[page_num]:
+            # --- Schengen logic ---
+            if schengen_checkbox_fields and field in schengen_checkbox_lookup:
+                group = schengen_checkbox_field_to_group[field]
+                if group in rendered_checkbox_groups:
+                    continue  # Already rendered this group
+                rendered_checkbox_groups.add(group)
+                options = schengen_checkbox_fields[group]
+                display_field = group.replace("_", " ").title()
+                # Use * for mandatory
+                label_text = f"{display_field} *" if is_mandatory(field, display_field) else display_field
+                page_ref = field_page_map.get(field)
+                if page_ref:
+                    label_text = f"{label_text} (Page {page_ref})"
+                tk.Label(
+                    scroll_frame,
+                    text=label_text,
+                    font=("Segoe UI", 11, "bold"),
+                    anchor="e",
+                    bg=logo_bg,
+                    fg="#353b48",
+                ).grid(row=row_idx, column=0, sticky="e", padx=(20, 8), pady=6)
+                # Render checkboxes for all options in this group
+                var_dict = {}
+                cb_frame = tk.Frame(scroll_frame, bg=logo_bg)
+                for opt_field, opt_label in options.items():
+                    var = tk.BooleanVar()
+                    cb = tk.Checkbutton(
+                        cb_frame,
+                        text=opt_label,
+                        variable=var,
+                        font=("Segoe UI", 10),
+                        bg="#f0f0f0",
+                        selectcolor="#44bd32",
+                        anchor="w"
+                    )
+                    cb.pack(side="left", padx=2, pady=2)
+                    var_dict[opt_field] = var
+                cb_frame.grid(row=row_idx, column=1, padx=(0, 20), pady=6, sticky="w")
+                entries[group] = var_dict
+                row_idx += 1
+                continue
+
+            # Schengen text fields
+            if schengen_text_fields and field in schengen_text_fields:
+                display_field = schengen_text_fields[field]
+                label_text = f"{display_field} *" if is_mandatory(field, display_field) else display_field
+                page_ref = field_page_map.get(field)
+                if page_ref:
+                    label_text = f"{label_text} (Page {page_ref})"
+                tk.Label(
+                    scroll_frame,
+                    text=label_text,
+                    font=("Segoe UI", 11, "bold"),
+                    anchor="e",
+                    bg=logo_bg,
+                    fg="#353b48",
+                ).grid(row=row_idx, column=0, sticky="e", padx=(20, 8), pady=6)
+                text_widget = tk.Text(
+                    scroll_frame,
+                    width=80,
+                    height=3,
+                    font=entry_font,
+                    bg="#f0f0f0",
+                    relief="flat",
+                    highlightthickness=1,
+                    highlightbackground="#dcdde1",
+                    wrap="word",
+                )
+                text_widget.grid(row=row_idx, column=1, padx=(0, 20), pady=6, sticky="ew")
+                scroll_frame.columnconfigure(1, weight=1)
+                text_widget.bind("<KeyRelease>", lambda e, tw=text_widget: auto_resize(e, tw))
+                text_widget.bind("<<Paste>>", lambda e, tw=text_widget: auto_resize(e, tw))
+                entries[field] = text_widget
+                row_idx += 1
+                continue
+
+            # --- fallback: original logic ---
+            display_field = humanize_field_name(
+                field.replace("fillable", "").replace("Fillable", "").strip()
+            )
+            page_ref = field_page_map.get(field)
+            if page_ref:
+                display_field = f"{display_field} (Page {page_ref})"
+            tk.Label(
+                scroll_frame,
+                text=display_field,
+                font=("Segoe UI", 11, "bold"),
+                anchor="e",
+                bg=logo_bg,
+                fg="#353b48",
+            ).grid(row=row_idx, column=0, sticky="e", padx=(20, 8), pady=6)
+
+            field_type = field_types_map.get(field, "text")
+            if field_type == "select" and field_options_map.get(field):
+                var = tk.StringVar()
+                options = field_options_map[field]
+                select_frame = tk.Frame(scroll_frame, bg=logo_bg)
+                for opt in options:
+                    cb = tk.Radiobutton(
+                        select_frame,
+                        text=opt,
+                        variable=var,
+                        value=opt,
+                        indicatoron=False,
+                        width=8,
+                        font=("Segoe UI", 10),
+                        bg="#f0f0f0",
+                        selectcolor="#44bd32",
+                        relief="ridge"
+                    )
+                    cb.pack(side="left", padx=2, pady=2)
+                select_frame.grid(row=row_idx, column=1, padx=(0, 20), pady=6, sticky="w")
+                entries[field] = var
+            else:
+                text_widget = tk.Text(
+                    scroll_frame,
+                    width=80,
+                    height=3,
+                    font=entry_font,
+                    bg="#f0f0f0",
+                    relief="flat",
+                    highlightthickness=1,
+                    highlightbackground="#dcdde1",
+                    wrap="word",
+                )
+                text_widget.grid(row=row_idx, column=1, padx=(0, 20), pady=6, sticky="ew")
+                scroll_frame.columnconfigure(1, weight=1)
+                text_widget.bind("<KeyRelease>", lambda e, tw=text_widget: auto_resize(e, tw))
+                text_widget.bind("<<Paste>>", lambda e, tw=text_widget: auto_resize(e, tw))
+                entries[field] = text_widget
+            row_idx += 1
 
     def on_submit():
         # Get all text from each Text widget
-        field_values = {
-            field: entry.get("1.0", "end-1c") for field, entry in entries.items()
-        }
+        field_values = {}
+        # For Schengen, handle checkboxes as group
+        if schengen_checkbox_fields:
+            # Add checkbox values as checked/unchecked
+            for group, var_dict in entries.items():
+                if group in schengen_checkbox_fields:
+                    for field_code, var in var_dict.items():
+                        field_values[field_code] = "Yes" if var.get() else ""
+            # Add text fields
+            for field, widget in entries.items():
+                if field in schengen_text_fields:
+                    field_values[field] = widget.get("1.0", "end-1c")
+        else:
+            # fallback: original logic
+            field_values = {
+                field: entry.get("1.0", "end-1c") for field, entry in entries.items()
+                if hasattr(entry, "get")
+            }
+            # Add select/radio fields
+            for field, entry in entries.items():
+                if hasattr(entry, "get") and not isinstance(entry, tk.Text):
+                    continue
+                if isinstance(entry, tk.StringVar):
+                    field_values[field] = entry.get()
         output_pdf = filedialog.asksaveasfilename(
             title="Save filled PDF as",
             defaultextension=".pdf",
